@@ -1,6 +1,8 @@
 # PRD — Smart School Canteen (portfolio demo)
 
-**Author:** Jason Geng · **Status:** v1 demo · **Type:** interactive prototype with simulated data
+**Author:** Jason Geng  
+**Status:** v2 prototype  
+**Type:** interactive product prototype with simulated data
 
 > This demo re-creates, from scratch and with fictional data, the product thinking behind a school-catering platform I led. No code, data, designs or names from the original product are used.
 
@@ -64,6 +66,18 @@ The demo has one role switcher with four views:
 - F1 Caterer enters a school contract; system sizes a credit limit
 - F2 Simulate the repayment: each meal-fee settlement auto-splits a share to repay the loan; show days to full repayment
 
+**Student at the counter (v2)**
+- C1 Put the tray down; the camera recognizes every dish, portion and nutrition in under 5 seconds
+- C2 Pay with face, student card, or a parent-approved QR code; no cash, no cashier
+- C3 Items the parent has blocked (desserts, sugary drinks) are flagged before payment and never charged
+- C4 Spending above the parent's daily limit is declined at the counter
+
+**Parent, money and rules (v2)**
+- P6 Top up the wallet from a bank account or debit card
+- P7 Set a daily counter limit, block desserts or sugary drinks, turn on auto top-up
+- P8 Get a notification after each lunch with the dishes, calories and amount charged
+- P9 See a week of recognized lunches with plain-language insights (missed vegetables, treats, protein)
+
 ## 5. AI & algorithm features
 
 | Feature | Decision it changes | Method in demo | Honest label |
@@ -71,6 +85,8 @@ The demo has one role switcher with four views:
 | **Demand forecast** | How many meals to cook tomorrow | Weighted day-of-week average + recent trend + event adjustments (exam day, field trip, weather), with a prediction interval from historical error | Real algorithm on simulated history |
 | **Menu planner** | Next week's menu | Constrained optimization: pick dishes to hit calorie/protein/vegetable targets, respect allergens and variety rules, stay under cost cap (greedy + local search) | Real algorithm on a fictional dish library |
 | **Kitchen-camera alerts** | Which kitchen to inspect today | Simulated detection events, ranked by a risk score (severity × repeat offences × time since last inspection) | Detection simulated; risk ranking real |
+| **Tray recognition** | What the student actually took, and what it costs | Demo: on-device detector over sample trays. Real mode: a vision model (Claude) returns dishes, portions, nutrition and bounding boxes as JSON; results are matched to the canteen's dish library for price and allergens, and unmatched items are labeled as model estimates | Sample trays simulated; photo mode real |
+| **Rule enforcement** | Whether an item can be bought | Parent rules (blocked categories, daily limit) applied to recognized items before payment | Real logic |
 | **Credit sizing** | How much working capital to extend | Contract value × months × advance rate, capped by deposit | Simple rule, shown transparently |
 
 ## 6. Success metrics (what I would measure in production)
