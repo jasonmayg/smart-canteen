@@ -1,31 +1,7 @@
-// Shared helpers: formatting, RNG, state store, events, toasts, modals, icons.
+// DOM helpers: selectors, toasts, modals, icons, ring chart.
+import { esc, clamp } from './format.js';
 export const $ = (s, el = document) => el.querySelector(s);
 export const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-export const money = n => (n < 0 ? '−' : '') + '$' + Math.abs(n).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-export const int = n => Math.round(n).toLocaleString('en-US');
-export const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-export const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-export function rng(seed) { return function () { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-export const timeNow = () => new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
-
-// ---- persistent state ----
-const KEY = 'sc2_state';
-const listeners = new Set();
-export const state = { data: null };
-export function loadState(defaults) {
-  let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) { saved = null; }
-  state.data = saved && saved.v === defaults.v ? saved : structuredClone(defaults);
-}
-export function save() { try { localStorage.setItem(KEY, JSON.stringify(state.data)); } catch (e) { /* storage unavailable: keep in memory */ } }
-export function update(fn) { fn(state.data); save(); listeners.forEach(l => l()); }
-export function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
-export function resetState(defaults) { state.data = structuredClone(defaults); save(); listeners.forEach(l => l()); }
-
-// ---- activity feed (what happened behind the scenes) ----
-export function activity(icon, tone, html) {
-  update(s => { s.activity.unshift({ t: timeNow(), icon, tone, html }); s.activity = s.activity.slice(0, 30); });
-}
 
 // ---- toasts ----
 export function toast(msg, icon = 'check') {

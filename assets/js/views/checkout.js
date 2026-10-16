@@ -1,11 +1,12 @@
 // Canteen checkout: tray recognition -> nutrition -> parental rules -> pay (face / card / parent QR) -> receipt.
-import { $, $$, money, int, esc, ico, update, state, toast, activity, modal, timeNow, rng } from '../core.js';
-import { SAMPLE_TRAYS, CHILD, TARGET } from '../data.js';
-import { drawTray, drawPhoto } from '../tray.js';
-import { recognizeDemo, recognizePhoto, vision } from '../vision.js';
-import { fmtDate } from '../store.js';
-import { openSettings } from '../main.js';
-
+import { money, int, esc, timeNow, rng } from '../lib/format.js';
+import { $, $$, ico, toast, modal } from '../lib/ui.js';
+import { update, state, activity, fmtDate } from '../state.js';
+import { SAMPLE_TRAYS, CHILD, TARGET } from '../domain/data.js';
+import { drawTray, drawPhoto } from '../render/tray.js';
+import { applyRules, decide } from '../domain/rules.js';
+import { recognizeDemo, recognizePhoto, vision } from '../services/vision.js';
+import { openSettings } from './settings.js';
 let mode = 'sample', trayIdx = 0, phase = 'idle', stage = '', items = [], dets = [], photo = null, photoFit = null, err = '', paid = null;
 const S = () => state.data;
 
@@ -72,13 +73,12 @@ function paintSide() {
   if (phase === 'error') { side.innerHTML = `<div class="card"><div class="card-b"><div class="row" style="align-items:flex-start"><span style="color:var(--danger)">${ico('alert')}</span><div><div class="strong">Couldn't recognize this photo</div><div class="small muted">${esc(err)}</div></div></div><div class="row" style="margin-top:12px"><button class="btn secondary" data-retry>Try again</button>${vision.apiKey ? '' : `<button class="btn primary" data-settings>${ico('key')}Add API key</button>`}</div></div></div>`; return; }
   if (phase === 'paid') { side.innerHTML = receiptCard(); return; }
   // recognized
-  const allowed = items.filter(i => !i.blocked); const tot = sum(allowed); const blocked = items.filter(i => i.blocked);
-  const overLimit = tot.price > S().controls.dailyLimit; const short = tot.price > S().wallet.balance;
+  const { allowed, blocked, t: tot, overLimit, short, canPay } = decide(items, S().controls, S().wallet.balance);
   const totM = tot.p * 4 + tot.c * 4 + tot.f * 9 || 1;
   side.innerHTML = `
   <div class="card"><div class="card-h"><h2>Tray</h2><span class="sub">${items.length} item${items.length !== 1 ? 's' : ''} recognized</span><div class="right"><button class="btn ghost sm" data-retry>${ico('refresh')}Rescan</button></div></div>
-    <div class="card-b">${items.map((it, i) => `<div class="item-row"><div style="min-width:0"><div class="strong small">${esc(it.name)} ${it.blocked ? '<span class="badge red">Blocked by parent</span>' : ''}${mode === 'photo' && !it.matched ? '<span class="badge">Model estimate</span>' : ''}</div><div class="tiny muted">${it.grams ? it.grams + ' g, ' : ''}${int(it.kcal)} kcal, ${it.p} g protein</div><div class="conf" title="Confidence ${Math.round(it.conf * 100)}%"><i style="width:${it.conf * 100}%"></i></div></div><div class="strong small num">${money(it.price)}</div><button class="btn icon ghost" data-remove="${i}" aria-label="Remove ${esc(it.name)}">${ico('x')}</button></div>`).join('')}
-      ${blocked.length ? `<div class="row" style="background:var(--danger-soft);border-radius:10px;padding:10px 12px;margin-top:10px;align-items:flex-start"><span style="color:var(--danger)">${ico('lock')}</span><div class="small"><b>${blocked.map(b => esc(b.name)).join(' and ')}</b> ${blocked.length > 1 ? 'are' : 'is'} blocked by ${CHILD.name}'s parent. Ask the student to put ${blocked.length > 1 ? 'them' : 'it'} back; ${blocked.length > 1 ? 'they are' : 'it is'} not charged.</div></div>` : ''}
+    <div class="card-b">${items.map((it, i) => `<div class="item-row"><div style="min-width:0"><div class="strong small">${esc(it.name)} ${it.blocked ? `<span class="badge red">${it.why.kind === 'allergen' ? ico('alert') : ico('lock')}${esc(it.why.text)}</span>` : ''}${mode === 'photo' && !it.matched ? '<span class="badge">Model estimate</span>' : ''}${it.allergensUnknown ? '<span class="badge amber">Allergens unknown, check by eye</span>' : ''}</div><div class="tiny muted">${it.grams ? it.grams + ' g, ' : ''}${int(it.kcal)} kcal, ${it.p} g protein</div><div class="conf" title="Confidence ${Math.round(it.conf * 100)}%"><i style="width:${it.conf * 100}%"></i></div></div><div class="strong small num">${money(it.price)}</div><button class="btn icon ghost" data-remove="${i}" aria-label="Remove ${esc(it.name)}">${ico('x')}</button></div>`).join('')}
+      ${blocked.length ? `<div class="row" style="background:var(--danger-soft);border-radius:10px;padding:10px 12px;margin-top:10px;align-items:flex-start"><span style="color:var(--danger)">${ico('lock')}</span><div class="small">${blocked.map(b => `<b>${esc(b.name)}</b>: ${esc(b.why.text.charAt(0).toLowerCase() + b.why.text.slice(1))}${b.why.kind === 'allergen' ? `, ${CHILD.name}'s allergy` : ''}.`).join('<br>')} Ask the student to put ${blocked.length > 1 ? 'them' : 'it'} back; ${blocked.length > 1 ? 'they are' : 'it is'} not charged.${blocked.some(b => b.why.kind === 'allergen') ? ' Her parent is notified about the allergen.' : ''}</div></div>` : ''}
       <div class="divider"></div>
       <div class="row between"><span class="strong">Total</span><span class="strong num" style="font-size:22px">${money(tot.price)}</span></div>
       <div class="row between small muted"><span>${int(tot.kcal)} kcal, ${tot.p} g protein</span><span>${tot.kcal >= TARGET.kcalMin && tot.kcal <= TARGET.kcalMax ? 'Within lunch target' : tot.kcal < TARGET.kcalMin ? 'Below lunch target' : 'Above lunch target'}</span></div>
@@ -89,14 +89,14 @@ function paintSide() {
     ${overLimit ? `<p class="small" style="color:var(--danger);margin-top:0">${money(tot.price)} is over ${CHILD.name}'s daily limit of ${money(S().controls.dailyLimit)}. Remove an item to continue.</p>` : ''}
     ${short && !overLimit ? `<p class="small" style="color:var(--danger);margin-top:0">Not enough in the wallet (${money(S().wallet.balance)}).</p>` : ''}
     <div class="grid cols-3">
-      <button class="btn lg primary" data-pay="face" ${overLimit || short || !allowed.length ? 'disabled' : ''}>${ico('face')}Face</button>
-      <button class="btn lg secondary" data-pay="card" ${overLimit || short || !allowed.length ? 'disabled' : ''}>${ico('card')}Card</button>
-      <button class="btn lg secondary" data-pay="qr" ${overLimit || short || !allowed.length ? 'disabled' : ''}>${ico('qr')}Parent QR</button>
+      <button class="btn lg primary" data-pay="face" ${canPay ? '' : 'disabled'}>${ico('face')}Face</button>
+      <button class="btn lg secondary" data-pay="card" ${canPay ? '' : 'disabled'}>${ico('card')}Card</button>
+      <button class="btn lg secondary" data-pay="qr" ${canPay ? '' : 'disabled'}>${ico('qr')}Parent QR</button>
     </div></div></div>
   ${rulesCard()}`;
 }
 
-function rulesCard() { const c = S().controls; return `<div class="card"><div class="card-h"><h3>${CHILD.name}'s rules</h3><span class="sub">Set by her parent in the family app</span></div><div class="card-b small"><div class="row between"><span>Daily limit</span><b>${money(c.dailyLimit)}</b></div><div class="row between"><span>Desserts</span><b>${c.blockDessert ? 'Blocked' : 'Allowed'}</b></div><div class="row between"><span>Sugary drinks</span><b>${c.blockSugary ? 'Blocked' : 'Allowed'}</b></div><div class="row between"><span>Wallet balance</span><b class="num">${money(S().wallet.balance)}</b></div></div></div>`; }
+function rulesCard() { const c = S().controls; return `<div class="card"><div class="card-h"><h3>${CHILD.name}'s rules</h3><span class="sub">Set by her parent in the family app</span></div><div class="card-b small"><div class="row between"><span>Daily limit</span><b>${money(c.dailyLimit)}</b></div><div class="row between"><span>Desserts</span><b>${c.blockDessert ? 'Blocked' : 'Allowed'}</b></div><div class="row between"><span>Sugary drinks</span><b>${c.blockSugary ? 'Blocked' : 'Allowed'}</b></div><div class="row between"><span>Allergies</span><b>${c.allergies.length ? esc(c.allergies.join(', ')) : 'None'}</b></div><div class="row between"><span>Wallet balance</span><b class="num">${money(S().wallet.balance)}</b></div></div></div>`; }
 
 function receiptCard() {
   const p = paid; return `<div class="card"><div class="card-b"><div class="processing" style="padding:10px 0 14px"><div class="success-check">${ico('check')}</div><div class="strong" style="font-size:18px">Paid, enjoy your lunch</div><div class="small muted">${CHILD.name} ${CHILD.last}, ${CHILD.grade}, paid with ${p.method.toLowerCase()}</div></div>
@@ -105,9 +105,6 @@ function receiptCard() {
   <div class="row" style="margin-top:14px"><button class="btn primary" data-next style="flex:1">Next tray</button><a class="btn secondary" href="#/family">${ico('home')}See parent app</a></div></div></div>`;
 }
 
-const sum = arr => arr.reduce((a, i) => { a.price += i.price; a.kcal += i.kcal; a.p += i.p; a.c += i.c; a.f += i.f; return a; }, { price: 0, kcal: 0, p: 0, c: 0, f: 0 });
-
-function applyRules(list) { const c = S().controls; return list.map(it => ({ ...it, blocked: (c.blockDessert && it.tags.includes('dessert')) || (c.blockSugary && it.tags.includes('sugary')) })); }
 
 async function scan() {
   phase = 'scanning'; stage = 'Starting'; paintInput(); paintOverlay(); paintSide();
@@ -115,7 +112,7 @@ async function scan() {
     const onStage = s => { stage = s; paintSide(); };
     const raw = mode === 'sample' ? await recognizeDemo(dets, onStage) : await recognizePhoto(photo.dataUrl, onStage);
     if (!raw.length) throw new Error('No food items were found in the photo.');
-    items = applyRules(raw); phase = 'recognized';
+    items = applyRules(raw, S().controls, S().controls.allergies); phase = 'recognized';
   } catch (e) { err = e.message || String(e); phase = 'error'; }
   paintInput(); paintOverlay(); paintSide();
 }
@@ -155,17 +152,17 @@ function pay(method) {
 }
 
 function complete(method) {
-  const allowed = items.filter(i => !i.blocked), blocked = items.filter(i => i.blocked); const t = sum(allowed);
+  const { allowed, blocked, t } = decide(items, S().controls, S().wallet.balance);
   const ids = allowed.map(i => i.id || i.name);
   update(s => {
     s.wallet.balance -= t.price;
     s.txns.unshift({ id: 'x' + Date.now(), date: fmtDate(new Date()), title: 'Lunch at checkout', detail: allowed.map(i => i.name).join(', '), amt: -t.price, kind: 'counter' });
-    blocked.forEach(b => s.txns.unshift({ id: 'xb' + Date.now() + b.name, date: fmtDate(new Date()), title: 'Blocked at checkout', detail: `${b.name}, by your rule`, amt: 0, kind: 'blocked' }));
+    blocked.forEach(b => s.txns.unshift({ id: 'xb' + Date.now() + b.name, date: fmtDate(new Date()), title: 'Blocked at checkout', detail: `${b.name}: ${b.why.text.toLowerCase()}`, amt: 0, kind: 'blocked' }));
     s.todayMeal = { date: fmtDate(new Date()), time: timeNow(), items: ids, kcal: t.kcal, p: t.p, c: t.c, f: t.f, price: t.price, source: mode === 'sample' ? 'Recognized at checkout' : 'Recognized from your photo by the vision model' };
     if (s.controls.autoTopup && s.wallet.balance < s.controls.lowBalance) { s.wallet.balance += 40; s.txns.unshift({ id: 'xa' + Date.now(), date: fmtDate(new Date()), title: 'Auto top-up', detail: 'Bank account ending 4021', amt: 40, kind: 'topup' }); }
   });
   activity('scan', 'green', `<b>${CHILD.name} paid ${money(t.price)}</b> at checkout with ${method.toLowerCase()}: ${esc(allowed.map(i => i.name).join(', '))}. ${int(t.kcal)} kcal, ${t.p} g protein.`);
-  if (blocked.length) activity('lock', 'red', `<b>Blocked</b>: ${esc(blocked.map(b => b.name).join(', '))}, by your spending rule. Not charged.`);
+  if (blocked.length) activity(blocked.some(b => b.why.kind === 'allergen') ? 'alert' : 'lock', 'red', `<b>Blocked at checkout</b>: ${blocked.map(b => `${esc(b.name)} (${esc(b.why.text.toLowerCase())})`).join(', ')}. Not charged.`);
   paid = { method, items: allowed, blocked, total: t.price, kcal: t.kcal, p: t.p };
   phase = 'paid'; paintSide();
   toast(`Charged ${money(t.price)} to ${CHILD.name}'s wallet`);

@@ -1,8 +1,7 @@
 // Dish recognition.
 // Demo mode: recognizes the sample trays the renderer drew (no network).
 // Real mode: sends an uploaded photo to a vision model with the user's own API key, straight from the browser.
-import { DISHES, D } from './data.js';
-
+import { DISHES, D } from '../domain/data.js';
 export const vision = { apiKey: '', model: 'claude-sonnet-5-5' }; // key lives in memory only, never saved
 
 const sleep = ms => new Promise(r => setTimeout(r, ms));
@@ -15,7 +14,7 @@ export async function recognizeDemo(dets, onStage) {
   return dets.map(d => { const x = D[d.id]; return { id: d.id, name: x.name, grams: x.g, kcal: x.kcal, p: x.p, c: x.c, f: x.f, price: x.price, conf: d.conf, box: d.box, al: x.al, type: x.type, tags: x.tags }; });
 }
 
-function matchLibrary(name) {
+export function matchLibrary(name) {
   const n = name.toLowerCase();
   let best = null, score = 0;
   for (const d of DISHES) {

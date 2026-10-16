@@ -1,10 +1,11 @@
 // Family app: a parent's phone. Home, Menu (pre-order + pay), Nutrition, Wallet (top-up, history, controls).
-import { $, $$, money, int, esc, ico, ring, update, state, toast, activity, timeNow } from '../core.js';
-import { D, DAYS, SET_PRICE, TARGET, CHILD, PARENT } from '../data.js';
-import { mealStats, insights } from '../algo.js';
-import { weekDate, fmtDate } from '../store.js';
-import { drawThumb } from '../tray.js';
-
+import { money, int, esc, timeNow } from '../lib/format.js';
+import { $, $$, ico, ring, toast } from '../lib/ui.js';
+import { update, state, activity, weekDate, fmtDate } from '../state.js';
+import { D, DAYS, SET_PRICE, TARGET, CHILD, PARENT, ALLERGENS } from '../domain/data.js';
+import { mealStats } from '../domain/menu.js';
+import { insights } from '../domain/nutrition.js';
+import { drawThumb } from '../render/tray.js';
 let tab = 'home', day = 0, sheet = null; // sheet: {type, step, ...}
 
 const S = () => state.data;
@@ -128,6 +129,7 @@ function wallet() {
     <div class="setting"><div class="grow"><div class="strong small">Daily limit at the counter</div><div class="tiny muted">Checkout declines anything above this</div></div><div class="row" style="gap:6px"><button class="btn icon secondary" data-limit="-1" aria-label="Lower limit">${ico('minus')}</button><span class="strong num" style="min-width:44px;text-align:center">${money(c.dailyLimit)}</span><button class="btn icon secondary" data-limit="1" aria-label="Raise limit">${ico('plus')}</button></div></div>
     <div class="setting"><div class="grow"><div class="strong small">Block desserts</div><div class="tiny muted">Cookies, cakes, ice cream</div></div><label class="switch"><input type="checkbox" data-ctl="blockDessert" ${c.blockDessert ? 'checked' : ''} aria-label="Block desserts"></label></div>
     <div class="setting"><div class="grow"><div class="strong small">Block sugary drinks</div><div class="tiny muted">Juice boxes and soda</div></div><label class="switch"><input type="checkbox" data-ctl="blockSugary" ${c.blockSugary ? 'checked' : ''} aria-label="Block sugary drinks"></label></div>
+    <div class="setting" style="display:block"><div class="strong small">Allergies</div><div class="tiny muted" style="margin-bottom:8px">Items containing these are stopped at checkout, whatever else is allowed</div><div class="row wrap" style="gap:6px">${ALLERGENS.map(x => `<label class="chip-check"><input type="checkbox" data-allergy="${x}" ${c.allergies.includes(x) ? 'checked' : ''}>${x}</label>`).join('')}</div></div>
     <div class="setting"><div class="grow"><div class="strong small">Auto top-up</div><div class="tiny muted">Add $40 when the balance drops below ${money(c.lowBalance)}</div></div><label class="switch"><input type="checkbox" data-ctl="autoTopup" ${c.autoTopup ? 'checked' : ''} aria-label="Auto top-up"></label></div>
     <div class="setting"><div class="grow"><div class="strong small">Lunch notifications</div><div class="tiny muted">What ${CHILD.name} ate, right after checkout</div></div><label class="switch"><input type="checkbox" data-ctl="notifyMeals" ${c.notifyMeals ? 'checked' : ''} aria-label="Lunch notifications"></label></div>
   </div>
@@ -192,6 +194,10 @@ function onChange(e) {
   if (t.dataset.away !== undefined) { const i = +t.dataset.away, on = t.checked;
     update(s => { s.away[i] = on; if (s.order) { const amt = SET_PRICE[s.choice[i]]; if (on) { s.wallet.escrow -= amt; s.wallet.balance += amt; s.txns.unshift({ id: 'x' + Date.now(), date: fmtDate(new Date()), title: 'Refund, away day', detail: `${DAYS[i]} lunch`, amt, kind: 'refund' }); } else { s.wallet.escrow += amt; s.wallet.balance -= amt; s.txns.unshift({ id: 'x' + Date.now(), date: fmtDate(new Date()), title: 'Lunch added back', detail: `${DAYS[i]} lunch`, amt: -amt, kind: 'order' }); } } });
     if (S().order) { activity('refresh', 'blue', on ? `<b>Refund</b>: ${DAYS[i]} marked away, ${money(SET_PRICE[S().choice[i]])} returned from escrow to the wallet. Kitchen headcount updated.` : `<b>Order</b>: ${DAYS[i]} lunch added back.`); toast(on ? `${DAYS[i]} marked away. ${money(SET_PRICE[S().choice[i]])} refunded.` : `${DAYS[i]} lunch added back.`); }
+    paint(); return; }
+  if (t.dataset.allergy) { const x = t.dataset.allergy, on = t.checked;
+    update(s => { s.controls.allergies = on ? [...new Set([...s.controls.allergies, x])] : s.controls.allergies.filter(y => y !== x); });
+    activity('alert', 'blue', `<b>Allergy</b>: ${x} ${on ? 'added. Anything containing it is stopped at checkout.' : 'removed.'}`);
     paint(); return; }
   if (t.dataset.ctl) { const k = t.dataset.ctl; update(s => { s.controls[k] = t.checked; });
     const label = { blockDessert: 'Desserts', blockSugary: 'Sugary drinks', autoTopup: 'Auto top-up', notifyMeals: 'Lunch notifications' }[k];

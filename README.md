@@ -19,8 +19,8 @@ School lunch has five parties — parents, students, kitchens, schools and regul
 
 | Area | What you can do |
 |---|---|
-| **Canteen checkout** (AI) | Pick a sample tray and scan it: each dish is detected with a confidence score, priced, and summed into calories and macros. Desserts or sugary drinks the parent blocked are flagged and not charged; anything over the daily limit is declined. Pay with face, student card, or a parent-approved QR code. **Your photo mode** sends a real photo to a vision model with your own API key. |
-| **Family app** | A parent's phone app: wallet with top-up, pre-ordering next week with standard / light / halal sets, away days refunded automatically, money held in bank escrow until each lunch is served, lunch notifications, a nutrition report with plain-language insights, and spending rules the checkout enforces. |
+| **Canteen checkout** (AI) | Pick a sample tray and scan it: each dish is detected with a confidence score, priced, and summed into calories and macros. Anything containing the child’s allergens is stopped first, whatever else is allowed; desserts or sugary drinks the parent blocked are flagged and not charged; anything over the daily limit is declined. Pay with face, student card, or a parent-approved QR code. **Your photo mode** sends a real photo to a vision model with your own API key. |
+| **Family app** | A parent's phone app: wallet with top-up, pre-ordering next week with standard / light / halal sets, away days refunded automatically, money held in bank escrow until each lunch is served, lunch notifications, a nutrition report with plain-language insights, allergies, and spending rules the checkout enforces. |
 | **Kitchen** | Confirmed orders become a pull list; a headcount forecast with event adjustments covers unconfirmed days; a menu planner searches dish combinations under a cost cap and allergen exclusions; the daily safety checklist feeds the district. |
 | **District dashboard** | Kitchens ranked by inspection risk with the formula on screen, meal fees in escrow, bank-traceable purchases, per-kitchen status. |
 | **Working capital** | A caterer's credit line sized from its school contract and repaid automatically from meal fees. |
@@ -41,6 +41,7 @@ Everything is connected: an order in the family app changes the kitchen's headco
 | **Headcount forecast** | Recency-weighted same-weekday average + trend + event adjustments; 80% range from back-tested error | Real code, simulated history |
 | **Menu planner** | Searches every combination per day under a cost cap and allergen exclusions, scored on calorie and protein targets, with variety rules across the week | Real code, fictional dish library |
 | **Inspection ranking** | Severity × repeats × days since last inspection | Real ranking over simulated detections |
+| **Allergy guard** | Allergens on every library dish are checked against the child’s allergies before payment; items the model couldn’t match are flagged “allergens unknown” for staff | Real |
 | **Nutrition insights** | Rules over a week of recognized lunches (protein days, missed vegetables, treats, calorie range) | Real |
 
 ## Product decisions worth discussing
@@ -53,6 +54,19 @@ Everything is connected: an order in the family app changes the kitchen's headco
 ## Tech
 
 Static site: HTML, CSS and vanilla JavaScript modules, Canvas for the trays, inline SVG for charts. No build step, no backend. Demo state is saved in the browser (Settings → Reset demo to start over).
+
+Product logic (menu planning, forecasting, risk, checkout rules, nutrition insights) lives in DOM-free modules covered by unit tests (`npm test`, Node 22) that run in CI. See **[ARCHITECTURE](docs/ARCHITECTURE.md)**.
+
+```
+assets/js/
+  lib/        format (pure), ui (DOM helpers)
+  domain/     data, menu, forecast, risk, nutrition, rules   (pure, tested)
+  services/   vision: the optional live model call
+  render/     tray: Canvas drawing for sample trays
+  views/      overview, family, checkout, kitchen, district, finance, settings
+  state.js    store, activity feed, seed data      main.js   shell and router
+tests/        node:test suites for domain/
+```
 
 ## Credits
 

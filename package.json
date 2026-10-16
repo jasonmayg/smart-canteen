@@ -1,0 +1,10 @@
+{
+  "name": "smart-canteen",
+  "private": true,
+  "type": "module",
+  "description": "Portfolio prototype: school lunch end to end, with AI tray recognition, parent rules and payments.",
+  "scripts": {
+    "start": "python3 -m http.server 8000",
+    "test": "node --test tests/*.test.mjs"
+  }
+}

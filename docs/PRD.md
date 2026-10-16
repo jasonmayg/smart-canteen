@@ -1,7 +1,7 @@
 # PRD — Smart School Canteen (portfolio demo)
 
 **Author:** Jason Geng  
-**Status:** v2 prototype  
+**Status:** v2.1 prototype  
 **Type:** interactive product prototype with simulated data
 
 > This demo re-creates, from scratch and with fictional data, the product thinking behind a school-catering platform I led. No code, data, designs or names from the original product are used.
@@ -71,6 +71,7 @@ The demo has one role switcher with four views:
 - C2 Pay with face, student card, or a parent-approved QR code; no cash, no cashier
 - C3 Items the parent has blocked (desserts, sugary drinks) are flagged before payment and never charged
 - C4 Spending above the parent's daily limit is declined at the counter
+- C5 Anything containing the child's allergens is stopped before payment, regardless of other rules; items the model can't match to the dish library are flagged for a staff check
 
 **Parent, money and rules (v2)**
 - P6 Top up the wallet from a bank account or debit card
@@ -86,7 +87,7 @@ The demo has one role switcher with four views:
 | **Menu planner** | Next week's menu | Constrained optimization: pick dishes to hit calorie/protein/vegetable targets, respect allergens and variety rules, stay under cost cap (greedy + local search) | Real algorithm on a fictional dish library |
 | **Kitchen-camera alerts** | Which kitchen to inspect today | Simulated detection events, ranked by a risk score (severity × repeat offences × time since last inspection) | Detection simulated; risk ranking real |
 | **Tray recognition** | What the student actually took, and what it costs | Demo: on-device detector over sample trays. Real mode: a vision model (Claude) returns dishes, portions, nutrition and bounding boxes as JSON; results are matched to the canteen's dish library for price and allergens, and unmatched items are labeled as model estimates | Sample trays simulated; photo mode real |
-| **Rule enforcement** | Whether an item can be bought | Parent rules (blocked categories, daily limit) applied to recognized items before payment | Real logic |
+| **Rule enforcement** | Whether an item can be bought | Allergies first, then parent rules (blocked categories, daily limit), applied to recognized items before payment | Real logic, unit-tested |
 | **Credit sizing** | How much working capital to extend | Contract value × months × advance rate, capped by deposit | Simple rule, shown transparently |
 
 ## 6. Success metrics (what I would measure in production)

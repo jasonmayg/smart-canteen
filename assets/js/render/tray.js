@@ -1,7 +1,6 @@
 // Procedural food renderer: draws school-lunch trays and dish thumbnails on canvas.
-import { D } from './data.js';
-import { rng } from './core.js';
-
+import { rng } from '../lib/format.js';
+import { D } from '../domain/data.js';
 function ell(ctx, x, y, rx, ry, color, rot = 0) { ctx.beginPath(); ctx.ellipse(x, y, Math.max(rx, .5), Math.max(ry, .5), rot, 0, Math.PI * 2); ctx.fillStyle = color; ctx.fill(); }
 function rr(ctx, x, y, w, h, r, color, stroke) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); if (color) { ctx.fillStyle = color; ctx.fill(); } if (stroke) { ctx.strokeStyle = stroke; ctx.lineWidth = 1.5; ctx.stroke(); } }
 let DENS = 1;

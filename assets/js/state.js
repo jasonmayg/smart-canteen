@@ -1,7 +1,29 @@
-// Default (seed) state for the demo.
-import { planWeek, mealStats } from './algo.js';
-import { DAYS } from './data.js';
+// App state: one versioned object in localStorage, change listeners, the activity feed, and the seed data.
+// Storage can be unavailable (private mode, blocked site data); the demo then runs in memory.
+import { timeNow } from './lib/format.js';
+import { DAYS } from './domain/data.js';
+import { planWeek, mealStats } from './domain/menu.js';
 
+// ---- persistent state ----
+const KEY = 'sc2_state';
+const listeners = new Set();
+export const state = { data: null };
+export function loadState(defaults) {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(KEY)); } catch (e) { saved = null; }
+  state.data = saved && saved.v === defaults.v ? saved : structuredClone(defaults);
+}
+export function save() { try { localStorage.setItem(KEY, JSON.stringify(state.data)); } catch (e) { /* storage unavailable: keep in memory */ } }
+export function update(fn) { fn(state.data); save(); listeners.forEach(l => l()); }
+export function onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); }
+export function resetState(defaults) { state.data = structuredClone(defaults); save(); listeners.forEach(l => l()); }
+
+// ---- activity feed (what happened behind the scenes) ----
+export function activity(icon, tone, html) {
+  update(s => { s.activity.unshift({ t: timeNow(), icon, tone, html }); s.activity = s.activity.slice(0, 30); });
+}
+
+// ---- seed data ----
 const today = new Date();
 export const fmtDate = d => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 export const daysAgo = n => { const d = new Date(today); d.setDate(today.getDate() - n); return d; };
@@ -13,7 +35,7 @@ function meal(daysBack, items) { const st = mealStats(items); return { date: fmt
 export function defaults() {
   const plan = planWeek(2.60, []).week;
   return {
-    v: 3,
+    v: 4,
     menu: plan.map(w => ({ ids: w.ids, light: w.light, halal: w.halal })),
     choice: DAYS.map(() => 'standard'),
     away: DAYS.map(() => false),
@@ -25,7 +47,7 @@ export function defaults() {
       { id: 'x3', date: fmtDate(daysAgo(7)), title: 'Lunch pre-order', detail: '5 lunches, released as served', amt: -22.50, kind: 'order' },
       { id: 'x4', date: fmtDate(daysAgo(8)), title: 'Wallet top-up', detail: 'Bank account ending 4021', amt: 40.00, kind: 'topup' },
     ],
-    controls: { dailyLimit: 8, blockDessert: true, blockSugary: false, autoTopup: true, lowBalance: 10, notifyMeals: true },
+    controls: { dailyLimit: 8, blockDessert: true, blockSugary: false, autoTopup: true, lowBalance: 10, notifyMeals: true, allergies: ['sesame'] },
     meals: [
       meal(5, ['m2', 'v1', 's1', 'e1']),
       meal(4, ['m6', 's2', 'e5']),
