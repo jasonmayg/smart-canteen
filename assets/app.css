@@ -315,3 +315,6 @@ table.t{width:100%;border-collapse:collapse;font-size:14px}
 .card.prop{text-align:left;cursor:pointer;padding:14px 16px;font:inherit;color:inherit}
 .card.prop.on{border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
 [hidden]{display:none!important}
+
+/* inline icons inside dialog text */
+.modal-b p svg,.modal-b .small svg,.modal-b .tiny svg{width:16px;height:16px;vertical-align:-3px}

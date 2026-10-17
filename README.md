@@ -6,6 +6,11 @@
 Suggested path: **Canteen checkout** → scan *Leo, today*, fix the rice the camera misread, pay by card (Leo isn’t enrolled in face pay) → click **Online** to go offline and keep selling → reconnect and watch sales settle → switch **Viewing as** to Lin Zhou (parent) and enroll Leo in face pay.
 
 <p align="center">
+  <a href="docs/demo.mp4"><img src="docs/demo.gif" alt="2-minute walkthrough: AI tray scan, fixing a misread dish, offline checkout and settlement, parent face-pay consent, district view" width="92%"></a><br>
+  <sub>2-minute walkthrough: AI tray scan, fixing a misread dish, offline checkout and settlement, parent face-pay consent, district view. ▶ <a href="docs/demo.mp4">Full video with captions (MP4, 2 min)</a></sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/1-checkout.png" alt="Canteen checkout: AI recognizes six items on a tray, flags a cookie blocked by the parent, totals price and nutrition" width="92%">
 </p>
 
