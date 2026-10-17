@@ -41,6 +41,8 @@ const LAYOUT_MAIN = { main: [.03, .06, .46, .88], staple: [.52, .06, .45, .42], 
 
 // Draws a tray. slots: [mainId, vegId, stapleId, extraId]; extras: treat ids placed beside the tray.
 // Returns detections in normalized canvas coordinates.
+/** Known confusions of the simulated detector (the recognition page measures these from corrections). */
+const MISREAD = { s2: 's1' };
 export function drawTray(canvas, slots, extras = [], seed = 7) {
   const dpr = Math.min(window.devicePixelRatio || 1, 2);
   const W = canvas.clientWidth || 640, H = canvas.clientHeight || 480;
@@ -63,7 +65,8 @@ export function drawTray(canvas, slots, extras = [], seed = 7) {
     rr(ctx, x, y, w, h, 16, '#B7C2CD'); rr(ctx, x + 2, y + 2, w - 4, h - 4, 14, '#BFC9D3');
     if (!id) return; const d = D[id]; ctx.save(); ctx.beginPath(); ctx.roundRect(x + 2, y + 2, w - 4, h - 4, 14); ctx.clip();
     const k = Math.max(1, Math.min(w, h) / 150); DENS = Math.min(2.2, Math.max(1, (w / k) * (h / k) / (170 * 170))); ctx.translate(x, y); ctx.scale(k, k); (DRAW[d.kind] || DRAW.rice)(ctx, 0, 0, w / k, h / k, R); DENS = 1; ctx.restore();
-    dets.push({ id, box: [(x + 6) / W, (y + 6) / H, (w - 12) / W, (h - 12) / H], conf: +(0.86 + R() * 0.13).toFixed(2) });
+    const c0 = +(0.86 + R() * 0.13).toFixed(2); // simulated detector: brown rice is often read as white rice, with low confidence
+    dets.push({ id: MISREAD[id] || id, truth: id, box: [(x + 6) / W, (y + 6) / H, (w - 12) / W, (h - 12) / H], conf: MISREAD[id] ? 0.66 : c0 });
   });
   extras.forEach((id, i) => {
     const d = D[id]; const x = W * .76, h = H * .36, y = H * (.1 + i * .42), w = W * .2;

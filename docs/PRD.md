@@ -1,7 +1,7 @@
 # PRD — Smart School Canteen (portfolio demo)
 
 **Author:** Jason Geng  
-**Status:** v2.1 prototype  
+**Status:** v3 prototype  
 **Type:** interactive product prototype with simulated data
 
 > This demo re-creates, from scratch and with fictional data, the product thinking behind a school-catering platform I led. No code, data, designs or names from the original product are used.
@@ -73,6 +73,28 @@ The demo has one role switcher with four views:
 - C4 Spending above the parent's daily limit is declined at the counter
 - C5 Anything containing the child's allergens is stopped before payment, regardless of other rules; items the model can't match to the dish library are flagged for a staff check
 
+**Counter quality (v3)**
+- Q1 Items recognized under 80% confidence are highlighted for the cashier
+- Q2 The cashier can swap a dish, remove an item or add a missed one; each fix is saved for retraining
+- Q3 Recognition accuracy (right first time, wrong dish, missed) and most-confused pairs are computed from fixes
+
+**Face pay and consent (v3)**
+- B1 Face pay is opt-in only, by a parent or guardian, per child, after a plain-language notice
+- B2 Withdrawal is one tap and deletes the face template within 24 hours
+- B3 The student card always works; parent QR works when online
+- B4 Consent changes are logged; the district sees enrollment and withdrawals by school; schools can choose not to enable face pay
+
+**Offline service (v3)**
+- X1 The checkout keeps selling when the network drops, against balances cached at the start of service
+- X2 Offline limits cap the risk: $8 a sale, $15 a student; parent QR and photo recognition pause
+- X3 On reconnect, sales settle once, in order; shortfalls are covered by auto top-up or recorded as owed and the parent is told
+- X4 The app installs and opens with no network
+
+**Roles (v3)**
+- A1 District food-safety officer → school principal → canteen departments (checkout, kitchen, finance) → parent → student
+- A2 Each level grants only roles below its own, inside its scope; only the school registers a parent; parents manage their own children
+- A3 Pages and actions follow permissions (a cashier sees checkout only; a cook sees the kitchen; the district can’t take payments)
+
 **Parent, money and rules (v2)**
 - P6 Top up the wallet from a bank account or debit card
 - P7 Set a daily counter limit, block desserts or sugary drinks, turn on auto top-up
@@ -88,6 +110,8 @@ The demo has one role switcher with four views:
 | **Kitchen-camera alerts** | Which kitchen to inspect today | Simulated detection events, ranked by a risk score (severity × repeat offences × time since last inspection) | Detection simulated; risk ranking real |
 | **Tray recognition** | What the student actually took, and what it costs | Demo: on-device detector over sample trays. Real mode: a vision model (Claude) returns dishes, portions, nutrition and bounding boxes as JSON; results are matched to the canteen's dish library for price and allergens, and unmatched items are labeled as model estimates | Sample trays simulated; photo mode real |
 | **Rule enforcement** | Whether an item can be bought | Allergies first, then parent rules (blocked categories, daily limit), applied to recognized items before payment | Real logic, unit-tested |
+| **Recognition accuracy** | Whether the recognizer is good enough, and what to retrain | Measured from cashier corrections; low-confidence flagging at 80% | Real code, simulated history |
+| **Offline settlement** | Whether a lunch sold offline gets paid | Ordered, idempotent settlement with auto top-up or owed balance | Real code |
 | **Credit sizing** | How much working capital to extend | Contract value × months × advance rate, capped by deposit | Simple rule, shown transparently |
 
 ## 6. Success metrics (what I would measure in production)
@@ -113,4 +137,6 @@ The demo has one role switcher with four views:
 
 - Parents' trust in escrow depends on a bank partner, not the app — UX must show the bank as custodian.
 - Forecasts can be gamed if kitchens are measured on waste only — pair waste with "ran out" incidents.
+- Face recognition of minors is regulated (BIPA in Illinois, and similar laws in Texas and Washington; COPPA under 13): written parental consent, retention limits and a non-biometric alternative are required, and some districts will opt out entirely.
+- Offline sales are credit risk: limits per sale and per student, and an owed-balance process with the parent.
 - Camera AI raises privacy concerns for kitchen staff — alerts show events, never faces; footage retention policy needed.

@@ -3,9 +3,12 @@
 import { timeNow } from './lib/format.js';
 import { DAYS } from './domain/data.js';
 import { planWeek, mealStats } from './domain/menu.js';
+import { SEED_USERS, checkGrant, checkRevoke, roleLabel } from './domain/org.js';
+import { POLICY, grant as grantConsent, revoke as revokeConsent } from './domain/consent.js';
+import { settle, offlineCheck, makeSale } from './domain/pos.js';
 
 // ---- persistent state ----
-const KEY = 'sc2_state';
+const KEY = 'sc3_state';
 const listeners = new Set();
 export const state = { data: null };
 export function loadState(defaults) {
@@ -35,7 +38,20 @@ function meal(daysBack, items) { const st = mealStats(items); return { date: fmt
 export function defaults() {
   const plan = planWeek(2.60, []).week;
   return {
-    v: 4,
+    v: 5,
+    viewer: 'u3',
+    users: SEED_USERS,
+    audit: [{ t: 'Aug 20', by: 'Lin Zhou', text: `Gave face-pay consent for Mia Lin (notice ${POLICY.version})` }, { t: 'Aug 12', by: 'Dr. Helen Ortiz', text: 'Granted School principal to Paul Grant at Maple Street Elementary' }],
+    students: {
+      mia: { id: 'mia', name: 'Mia Lin', household: 'h1', grade: 'Grade 4', allergies: null /* uses controls.allergies */ },
+      leo: { id: 'leo', name: 'Leo Lin', household: 'h1', grade: 'Grade 1', allergies: [] },
+    },
+    consents: { mia: { status: 'granted', by: 'Lin Zhou', at: 'Aug 20', policy: POLICY.version }, leo: { status: 'none' } },
+    offline: null, // { since, sales: [], cachedBalance }
+    appliedSales: [],
+    settlements: [],
+    recogFixes: [],
+    recogItems: 0,
     menu: plan.map(w => ({ ids: w.ids, light: w.light, halal: w.halal })),
     choice: DAYS.map(() => 'standard'),
     away: DAYS.map(() => false),
@@ -61,3 +77,67 @@ export function defaults() {
     kitchenPlan: null,
   };
 }
+
+// ---- people and access ----
+export const viewer = () => state.data.users.find(u => u.id === state.data.viewer) || state.data.users[0];
+
+export function grantUser(actor, { name, role, scope }) {
+  const chk = checkGrant(actor, role, scope); if (!chk.ok) return chk;
+  if (!name.trim()) return { ok: false, reason: 'Enter a name.' };
+  const u = { id: 'u' + Date.now(), name: name.trim(), role, scope: { ...scope } };
+  update(s => { s.users.push(u); s.audit.unshift({ t: timeNow(), by: actor.name, text: `Granted ${roleLabel(u)} to ${u.name}` }); });
+  return { ok: true, user: u };
+}
+export function revokeUser(actor, id) {
+  const t = state.data.users.find(u => u.id === id), chk = checkRevoke(actor, t); if (!chk.ok) return chk;
+  update(s => { s.users = s.users.filter(u => u.id !== id); s.audit.unshift({ t: timeNow(), by: actor.name, text: `Removed ${roleLabel(t)} access for ${t.name}` }); if (s.viewer === id) s.viewer = actor.id; });
+  return { ok: true };
+}
+
+// ---- face-pay consent ----
+export function setConsent(studentId, on) {
+  const st = state.data.students[studentId];
+  try {
+    const r = on ? grantConsent(viewer(), st, fmtDate(new Date()), POLICY.version) : revokeConsent(viewer(), st, fmtDate(new Date()));
+    update(s => { s.consents[studentId] = r.record; s.audit.unshift(r.audit); });
+    return { ok: true };
+  } catch (e) { return { ok: false, reason: e.message }; }
+}
+
+// ---- offline checkout ----
+export const isOffline = () => !!state.data.offline;
+export function goOffline(reason = 'manual') {
+  if (state.data.offline) return;
+  update(s => { s.offline = { since: timeNow(), reason, sales: [], cachedBalance: s.wallet.balance }; });
+}
+/** Try to queue a sale while offline. Returns { ok, reason, sale }. */
+export function queueSale({ studentId, studentName, items, total, method }) {
+  const off = state.data.offline;
+  const chk = offlineCheck({ total, method, studentId, cachedBalance: off.cachedBalance, queued: off.sales });
+  if (!chk.ok) return chk;
+  const sale = makeSale({ id: 'sale-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6), terminal: 'Station 2', studentId, studentName, items, total, method, t: new Date().toISOString() });
+  update(s => { s.offline.sales.push(sale); });
+  return { ok: true, sale };
+}
+/** Meanwhile, the wallet is used elsewhere (demo helper to show a shortfall at settlement). */
+export function spendElsewhere(amount = 40) {
+  update(s => { s.wallet.balance = Math.round((s.wallet.balance - amount) * 100) / 100; s.txns.unshift({ id: 'xe' + Date.now(), date: fmtDate(new Date()), title: 'Paid elsewhere', detail: 'Field-trip fee, paid from the wallet', amt: -amount, kind: 'other' }); });
+}
+/** Reconnect: settle queued sales against the real wallet. Returns the settlement report. */
+export function goOnline() {
+  const off = state.data.offline; if (!off) return null;
+  const c = state.data.controls;
+  const r = settle({ balance: state.data.wallet.balance, autoTopup: c.autoTopup, lowBalance: c.lowBalance, topupAmount: 40 }, off.sales, state.data.appliedSales);
+  update(s => {
+    s.wallet.balance = r.wallet.balance;
+    off.sales.filter(x => r.settled.includes(x.id)).forEach(x => s.txns.unshift({ id: x.id, date: fmtDate(new Date()), title: 'Lunch at checkout (offline)', detail: `${x.studentName}: ${x.items.join(', ')}`, amt: -x.total, kind: 'counter' }));
+    r.topups.forEach(t => s.txns.unshift({ id: 'xa' + Date.now() + Math.random(), date: fmtDate(new Date()), title: 'Auto top-up', detail: 'Bank account ending 4021', amt: t.amount, kind: 'topup' }));
+    s.appliedSales = r.appliedIds.slice(-500);
+    s.settlements.unshift({ t: timeNow(), since: off.since, count: r.settled.length, total: r.total, topups: r.topups.length, owed: r.owed, skipped: r.skipped.length });
+    s.offline = null;
+  });
+  return r;
+}
+
+// ---- recognition corrections ----
+export function recordFix(rec) { update(s => { s.recogFixes.unshift({ ...rec, t: timeNow(), by: viewer().name }); s.recogFixes = s.recogFixes.slice(0, 200); }); }

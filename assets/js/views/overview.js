@@ -16,7 +16,7 @@ export function renderOverview(root) {
   <div class="grid cols-4" style="margin-top:16px">
     ${[['Food waste target', '~15% to under 5%', 'via weekly pre-ordering'], ['Checkout target', 'under 5 s', 'per tray, no cashier'], ['Caterer cash cycle target', '45–60 to under 7 days', 'with fee-backed credit'], ['Forecast error target', 'under 5%', 'next-day headcount']].map(([a, b, c]) => `<div class="card kpi"><div class="label">${a}</div><div class="value" style="font-size:21px">${b}</div><div class="delta muted">${c}</div></div>`).join('')}
   </div>
-  <p class="demo-note">These are the product targets from the PRD, not measured results. Start with the <a href="#/family">Family app</a>, place an order, then scan a tray at <a href="#/checkout">Canteen checkout</a>.</p>`;
+  <p class="demo-note">These are the product targets from the PRD, not measured results. Try <a href="#/checkout">Canteen checkout</a>: scan “Leo, today”, fix the rice the camera misread, pay by card. Click <b>Online</b> at the top to go offline and keep selling, then reconnect to settle. Use <b>Viewing as</b> to switch between the district, the principal, a cashier, a cook and a parent.</p>`;
   const c = $('#ovTray'); requestAnimationFrame(() => drawTray(c, SAMPLE_TRAYS[0].slots, [], 11));
 }
 

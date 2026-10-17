@@ -1,7 +1,9 @@
 // Family app: a parent's phone. Home, Menu (pre-order + pay), Nutrition, Wallet (top-up, history, controls).
 import { money, int, esc, timeNow } from '../lib/format.js';
 import { $, $$, ico, ring, toast } from '../lib/ui.js';
-import { update, state, activity, weekDate, fmtDate } from '../state.js';
+import { update, state, activity, weekDate, fmtDate, viewer, setConsent, isOffline } from '../state.js';
+import { POLICY, STATUS, faceAllowed } from '../domain/consent.js';
+import { can } from '../domain/org.js';
 import { D, DAYS, SET_PRICE, TARGET, CHILD, PARENT, ALLERGENS } from '../domain/data.js';
 import { mealStats } from '../domain/menu.js';
 import { insights } from '../domain/nutrition.js';
@@ -35,6 +37,7 @@ export function renderFamily(root) {
   $('#phTabs').addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; tab = b.dataset.tab; sheet = null; paint(); $('#phScroll').scrollTop = 0; });
   $('#phScroll').addEventListener('click', onClick); $('#phScroll').addEventListener('change', onChange);
   $('#phSheet').addEventListener('click', onSheetClick);
+  $('#phSheet').addEventListener('change', e => { if (e.target.id === 'consentOk') $('#consentGo').disabled = !e.target.checked; });
   paint();
 }
 
@@ -57,6 +60,7 @@ function home() {
   <div class="m-card balance m-section">
     <div class="small" style="opacity:.85;font-weight:600">${CHILD.name}'s wallet</div>
     <div class="amt">${money(s.wallet.balance)}</div>
+    ${s.offline?.sales.length ? `<div class="small" style="opacity:.9">${s.offline.sales.length} lunch${s.offline.sales.length > 1 ? 'es' : ''} (${money(s.offline.sales.reduce((x, y) => x + y.total, 0))}) bought while the canteen was offline. Charged when it reconnects.</div>` : ''}
     <div class="small" style="opacity:.85">${s.wallet.escrow > 0 ? `${money(s.wallet.escrow)} held in escrow for next week` : 'Nothing held for upcoming lunches'}</div>
     <div class="row" style="margin-top:12px"><button class="btn secondary sm" data-act="topup">${ico('plus')}Top up</button><button class="btn secondary sm" data-act="goto-wallet">${ico('lock')}Spending rules</button></div>
   </div>
@@ -124,6 +128,7 @@ function wallet() {
   <div class="m-card balance m-section"><div class="small" style="opacity:.85;font-weight:600">Available</div><div class="amt">${money(s.wallet.balance)}</div>
     <div class="small" style="opacity:.85">Held in bank escrow: ${money(s.wallet.escrow)}. Released to the caterer only after each lunch is served.</div>
     <div class="row" style="margin-top:12px"><button class="btn secondary sm" data-act="topup">${ico('plus')}Top up</button></div></div>
+  ${facePay()}
   <div class="m-title">Spending rules <span class="tiny muted">Enforced at the checkout</span></div>
   <div class="m-card" style="padding:4px 14px">
     <div class="setting"><div class="grow"><div class="strong small">Daily limit at the counter</div><div class="tiny muted">Checkout declines anything above this</div></div><div class="row" style="gap:6px"><button class="btn icon secondary" data-limit="-1" aria-label="Lower limit">${ico('minus')}</button><span class="strong num" style="min-width:44px;text-align:center">${money(c.dailyLimit)}</span><button class="btn icon secondary" data-limit="1" aria-label="Raise limit">${ico('plus')}</button></div></div>
@@ -137,9 +142,29 @@ function wallet() {
   <div class="m-card" style="padding:4px 14px">${s.txns.map(t => `<div class="txn"><div class="icon-tile" style="background:${t.amt > 0 ? 'var(--brand-soft)' : 'var(--surface-2)'};color:${t.amt > 0 ? 'var(--brand)' : 'var(--ink-2)'}">${ico(t.kind === 'topup' ? 'arrowDown' : t.kind === 'refund' ? 'refresh' : t.kind === 'counter' ? 'scan' : t.kind === 'blocked' ? 'lock' : 'utensils')}</div><div style="min-width:0"><div class="strong small">${esc(t.title)}</div><div class="tiny muted">${esc(t.detail)}</div></div><div class="amt small" style="color:${t.amt > 0 ? 'var(--brand-ink)' : t.kind === 'blocked' ? 'var(--danger)' : 'var(--ink)'}">${t.kind === 'blocked' ? 'Declined' : (t.amt > 0 ? '+' : '') + money(t.amt)}<small>${t.date}</small></div></div>`).join('')}</div>`;
 }
 
+// ---------- face pay consent ----------
+function facePay() {
+  const s = S(), mine = can(viewer(), 'consent.manage');
+  return `<div class="m-title">Face pay <span class="tiny muted">Optional, per child</span></div>
+  <div class="m-card" style="padding:4px 14px">${Object.values(s.students).map(st => { const c = s.consents[st.id], on = faceAllowed(c);
+    return `<div class="setting"><div class="icon-tile" style="background:${on ? 'var(--brand-soft)' : 'var(--surface-2)'};color:${on ? 'var(--brand)' : 'var(--muted)'}">${ico('face')}</div><div class="grow"><div class="strong small">${esc(st.name)}</div><div class="tiny muted">${on ? `Enrolled by ${esc(c.by)} on ${c.at}` : c?.status === 'revoked' ? `Withdrawn ${c.at}; face template deleted` : 'Not enrolled. Pays with the student card.'}</div></div>
+      ${mine ? `<button class="btn ${on ? 'ghost' : 'secondary'} sm" data-consent="${st.id}" data-on="${on ? 0 : 1}">${on ? 'Withdraw' : 'Enroll'}</button>` : `<span class="badge">${on ? 'Enrolled' : 'Off'}</span>`}</div>`; }).join('')}
+    <div class="tiny muted" style="padding:10px 0">${mine ? 'The student card always works, whatever you choose.' : 'Only a parent or guardian can change this.'}</div></div>`;
+}
+
 // ---------- sheets ----------
 function sheetHTML() {
   const s = S();
+  if (sheet.type === 'consent') {
+    const st = s.students[sheet.id];
+    if (!sheet.on) return wrap(`<div class="strong" style="font-size:18px">Withdraw face pay for ${esc(st.name.split(' ')[0])}?</div>
+      <p class="small">${esc(st.name.split(' ')[0])}’s face template will be deleted within 24 hours. ${st.id === 'leo' ? 'He' : 'She'} will pay with the student card, and nothing else changes.</p>
+      <button class="btn danger block lg" data-sheet="consent-go">Withdraw and delete</button><button class="btn ghost block" data-sheet="close" style="margin-top:6px">Keep it</button>`);
+    return wrap(`<div class="strong" style="font-size:18px">Face pay for ${esc(st.name.split(' ')[0])}</div><div class="tiny muted" style="margin-bottom:8px">Notice ${POLICY.version}. Please read before deciding.</div>
+      ${[['What we store', POLICY.stored], ['Where', POLICY.where], ['What it is used for', POLICY.use], ['How long', POLICY.retention], ['If you say no', POLICY.alternative]].map(([h, t]) => `<div class="small" style="padding:6px 0;border-bottom:1px solid var(--border)"><b>${h}</b><br>${esc(t)}</div>`).join('')}
+      <label class="row small" style="margin:12px 0;align-items:flex-start"><input type="checkbox" id="consentOk" style="width:20px;height:20px;margin-top:2px;accent-color:var(--brand)"><span>I am ${esc(st.name.split(' ')[0])}’s parent or legal guardian and I agree to face pay under this notice. I can withdraw at any time.</span></label>
+      <button class="btn primary block lg" data-sheet="consent-go" id="consentGo" disabled>Give consent</button><button class="btn ghost block" data-sheet="close" style="margin-top:6px">Not now</button>`);
+  }
   if (sheet.type === 'review') {
     if (sheet.step === 'processing') return wrap(`<div class="processing"><div class="spinner"></div><div class="strong">Paying from ${CHILD.name}'s wallet</div><div class="small muted">Moving ${money(orderTotal())} into bank escrow</div></div>`);
     if (sheet.step === 'done') return wrap(`<div class="processing"><div class="success-check">${ico('check')}</div><div class="strong" style="font-size:18px">Lunches ordered</div><div class="small muted">${lunches()} lunches, ${money(orderTotal())} held in escrow. The kitchen sees your order now.</div><button class="btn primary block" data-sheet="close">Done</button></div>`);
@@ -182,6 +207,7 @@ function onClick(e) {
     if (S().order && SET_PRICE[k] !== SET_PRICE[old]) toast(`${DAYS[day]} changed to ${k}. Price difference settled.`);
     paint(); return; }
   if (b.dataset.meal) { sheet = { type: 'meal', i: +b.dataset.meal }; paint(); return; }
+  if (b.dataset.consent) { sheet = { type: 'consent', id: b.dataset.consent, on: b.dataset.on === '1' }; paint(); return; }
   if (b.dataset.limit) { update(s => { s.controls.dailyLimit = Math.max(2, Math.min(20, s.controls.dailyLimit + +b.dataset.limit)); }); paint(); return; }
   const a = b.dataset.act;
   if (a === 'topup') { sheet = { type: 'topup', amount: 40, method: 'bank' }; paint(); }
@@ -211,6 +237,9 @@ function onSheetClick(e) {
   if (b.dataset.method) { sheet.method = b.dataset.method; paint(); return; }
   const a = b.dataset.sheet;
   if (a === 'close') { sheet = null; paint(); }
+  if (a === 'consent-go') { const st = S().students[sheet.id], on = sheet.on; const r = setConsent(sheet.id, on); sheet = null;
+    if (!r.ok) toast(r.reason, 'alert'); else { activity('face', on ? 'green' : 'blue', on ? `<b>Face pay</b>: ${esc(viewer().name)} gave consent for ${esc(st.name)} (notice ${POLICY.version}).` : `<b>Face pay</b>: consent withdrawn for ${esc(st.name)}. Face template deleted; the card still works.`); toast(on ? `${st.name} can now pay with face` : `Face pay withdrawn. Template deleted.`); }
+    paint(); }
   if (a === 'topup-from-order') { const need = Math.ceil((orderTotal() - S().wallet.balance) / 20) * 20; sheet = { type: 'topup', amount: Math.max(20, Math.min(60, need)), method: 'bank', then: 'review' }; paint(); }
   if (a === 'back-to-review') { sheet = { type: 'review' }; paint(); }
   if (a === 'pay-topup') { sheet.step = 'processing'; paint();

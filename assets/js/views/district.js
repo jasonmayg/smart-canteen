@@ -5,6 +5,10 @@ import { update, state, fmtDate, daysAgo } from '../state.js';
 import { CHECKS, SCHOOLS, SCHOOL_STUDENTS, ALERTS } from '../domain/data.js';
 import { riskOf } from '../domain/risk.js';
 import { kpi } from './kitchen.js';
+import { SCHOOL_LIST } from '../domain/org.js';
+import { POLICY, faceAllowed } from '../domain/consent.js';
+import { quality } from '../domain/recog.js';
+import { ico } from '../lib/ui.js';
 const S = () => state.data;
 
 const SCH = (() => { const r = rng(9); return SCHOOLS.map((n, i) => { const stu = SCHOOL_STUDENTS[i]; const meals = Math.round(stu * (.82 + r() * .12)); const collected = meals * 4.5 * 21; return { n, stu, meals, check: Math.round(84 + r() * 16), waste: +(3 + r() * 12).toFixed(1), collected, released: collected * (.55 + r() * .1) }; }); })();
@@ -26,6 +30,17 @@ export function renderDistrict(root) {
       <div class="list"><div class="list-item"><span class="small" style="flex:1">Collected from parents</span><b class="num">${money(col)}</b></div><div class="list-item"><span class="small" style="flex:1">Released for served lunches</span><b class="num">${money(rel)}</b></div><div class="list-item"><span class="small" style="flex:1">Held by the custodian bank</span><b class="num">${money(col - rel)}</b></div></div>
       <div class="macro-bar" style="margin-top:12px"><i style="width:${rel / col * 100}%;background:var(--brand)"></i><i style="width:${(col - rel) / col * 100}%;background:var(--carbs)"></i></div>
       <p class="tiny muted" style="margin:10px 0 0">Refunds for absences come out of escrow, never from the caterer.</p></div></div>
+  </div>
+  <div class="grid cols-2" style="margin-top:16px">
+    <div class="card"><div class="card-h"><h2>${ico('face')} Face-pay consent</h2><span class="sub">Notice ${POLICY.version}</span></div><div class="card-b">
+      <div class="t-wrap"><table class="t"><thead><tr><th>School</th><th class="r">Enrolled</th><th class="r">Withdrawn</th><th>Card fallback</th></tr></thead><tbody>
+      ${SCHOOL_LIST.map(sc => { const live = sc.live, cons = Object.values(s.consents); const en = live ? cons.filter(faceAllowed).length : Math.round(sc.students * sc.kpi.enrolledFace), wd = live ? cons.filter(c => c.status === 'revoked').length : sc.id === 's2' ? 6 : 0;
+        return `<tr><td>${esc(sc.name)}</td><td class="r">${en}${live ? ` of ${cons.length} demo students` : ` of ${sc.students}`}</td><td class="r">${wd}</td><td><span class="badge green">Always on</span></td></tr>`; }).join('')}
+      </tbody></table></div>
+      <p class="tiny muted" style="margin:10px 0 0">Opt-in only, by a parent, per child, after reading the notice. Withdrawal deletes the face template within 24 hours. Cedar Park hasn’t enabled face pay at all; the card works everywhere. Every consent change is in the audit log.</p></div></div>
+    <div class="card"><div class="card-h"><h2>${ico('sparkles')} Recognition and offline service</h2></div><div class="card-b">
+      ${(() => { const q = quality(s.recogFixes, s.recogItems); return `<div class="list"><div class="list-item"><span class="small" style="flex:1">Dish recognition right first time (Maple Street, 30 days)</span><b class="num">${(q.itemAccuracy * 100).toFixed(1)}%</b></div><div class="list-item"><span class="small" style="flex:1">Corrected trays queued for retraining</span><b class="num">${int(q.retrain)}</b></div><div class="list-item"><span class="small" style="flex:1">Offline sales settled this session</span><b class="num">${s.settlements.reduce((a, x) => a + x.count, 0)}</b></div><div class="list-item"><span class="small" style="flex:1">Lunches left short at settlement</span><b class="num">${s.settlements.reduce((a, x) => a + x.owed.length, 0)}</b></div></div>`; })()}
+      <p class="tiny muted" style="margin:10px 0 0">Accuracy is measured from cashier corrections in real service, not from a benchmark.</p></div></div>
   </div>
   <div class="card" style="margin-top:16px"><div class="card-h"><h2>Kitchens</h2></div><div class="card-b"><div class="t-wrap"><table class="t"><thead><tr><th>Kitchen</th><th class="r">Students</th><th class="r">Lunches today</th><th class="r">Checklist</th><th class="r">Food waste</th><th>Status</th></tr></thead><tbody>
     ${SCH.map(x => { const a = ALERTS.find(y => y.k === x.n && !s.inspected[y.id]); const st = a && riskOf(a) >= 10 ? ['red', 'Inspect today'] : a ? ['amber', 'Watch'] : x.check < 90 ? ['amber', 'Checklist late'] : ['green', 'On track']; return `<tr><td class="strong">${x.n}</td><td class="r">${int(x.stu)}</td><td class="r">${int(x.meals)}</td><td class="r">${x.check}%</td><td class="r">${x.waste}%</td><td><span class="badge ${st[0]}"><span class="dot"></span>${st[1]}</span></td></tr>`; }).join('')}</tbody></table></div></div></div>

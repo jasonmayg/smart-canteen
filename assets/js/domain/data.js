@@ -45,10 +45,10 @@ export const PARENT = { name:'Lin' };
 
 // sample trays for the checkout kiosk: dish ids per tray slot [main, veg, staple, extra, side-extra]
 export const SAMPLE_TRAYS = [
-  { id:'tray1', label:'Mia, today', slots:['m1','v4','s1','e5'] },
-  { id:'tray2', label:'Vegetarian', slots:['m5','v3','s2','e1'] },
-  { id:'tray3', label:'With treats', slots:['m7','v2','s1','e3'], extras:['t1','t2'] },
-  { id:'tray4', label:'Has sesame', slots:['m8','v6','s4','e4'] },
+  { id:'tray1', label:'Mia, today', student:'mia', slots:['m1','v4','s1','e5'] },
+  { id:'tray2', label:'Leo, today', student:'leo', slots:['m5','v3','s2','e1'] },
+  { id:'tray3', label:'Mia, with treats', student:'mia', slots:['m7','v2','s1','e3'], extras:['t1','t2'] },
+  { id:'tray4', label:'Mia, sesame', student:'mia', slots:['m8','v6','s4','e4'] },
 ];
 
 export const SCHOOLS = ['Maple Street Elementary','Harbor View Middle','Cedar Park Elementary','Lakeside Elementary','Riverside High','Oak Hill Middle','Pinecrest Elementary','Westgate High','Sunnyvale Elementary','Brookfield Middle','Elm Grove Elementary','North Ridge High'];

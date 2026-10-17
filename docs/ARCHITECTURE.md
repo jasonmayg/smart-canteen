@@ -17,10 +17,15 @@ assets/js/
     risk.js            inspection risk ranking; credit limit sizing
     nutrition.js       plain-language insights from a week of lunches
     rules.js           checkout rules: allergies, parent blocks, daily limit, balance
+    org.js             district/school/department/household tree, roles, permissions, delegation
+    consent.js         face-pay consent: who may consent, notice version, withdrawal, payment methods
+    pos.js             offline sale limits, ordered idempotent settlement, reconciliation
+    recog.js           cashier corrections (swap/remove/add) and measured recognition accuracy
   services/vision.js   recognition: simulated detector for sample trays; live vision model for photos
   render/tray.js       procedural Canvas trays and dish thumbnails
   views/               one file per page (family, checkout, kitchen, district, finance, overview, settings)
-tests/domain.test.mjs  node:test, run in CI on every push
+sw.js, manifest       installable PWA; app shell precached so checkout opens offline
+tests/*.test.mjs       node:test, run in CI on every push
 ```
 
 ## Rules the code follows
